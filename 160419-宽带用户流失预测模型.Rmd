@@ -1,0 +1,1070 @@
+---
+title: "宽带用户流失预测模型"
+author: "junsuo"
+date: "2016年4月19日"
+output: html_document
+---
+
+
+# 1、获取数据
+
+```{r}
+library(RODBC)
+con = odbcConnect("sql", uid="sa", pwd="wjstyut")
+detall = sqlQuery(con,"select * from TMP_DETAIL_ALL_A where status is not null")
+close(con)
+
+# 将用户类别字段转化为因子
+detall$STATUS = as.factor(detall$STATUS)
+# 将用户累计上网时长转化为小时
+detall$timelen_sum = detall$timelen_sum/60
+# 去掉用户电话号码主键
+detall = detall[,-1]
+
+```
+
+
+
+## 2.初步查看数据
+```{r}
+dim(detall)
+str(detall)
+#attributes(detall)
+head(detall)
+summary(detall)
+```
+
+
+## 3.人工对变量进行探索
+```{r}
+# 不同用户的各变量分布情况
+setwd("D:/2016/A-策划项目/03-宽带用户行为分析系统/03-建模过程")
+for(i in 1:9){
+    img=paste(i*9-8,"_",i*9,".jpg",sep = "")
+    jpeg(file=img, width = 800, height = 800)
+    
+    par(mfrow=c(3,3))
+    
+    for(j in (i*9-8):(i*9)){
+        boxplot(detall[,j]~detall$STATUS,
+                xlab = colnames(detall)[j],
+                cex.lab = 2.5,
+                col.lab = "red")
+    }
+    
+    dev.off()
+}
+
+
+img=paste("82-87",".jpg",sep = "")
+jpeg(file=img, width = 800, height = 800)
+
+par(mfrow=c(3,3))
+    
+for(j in 82:86){
+    boxplot(detall[,j]~detall$STATUS,
+            xlab = colnames(detall)[j],
+            cex.lab = 2.5,
+            col.lab = "red")
+}
+dev.off()
+
+```
+
+
+#  4.对变量进行规约
+## 4.1 利用相关性算法对变量进行规约
+```{r}
+#相关性分析
+library(corrplot)
+
+# all 相关性
+cor = cor(detall[,-87])
+corrplot(cor,
+         method = "color",
+         type = "lower",
+         tl.cex = .7,
+         tl.pos = "tl",
+         cl.pos = "n",
+         #tl.pos = "n", 
+         order = "AOE"
+         )
+corrplot(cor,
+         method = "color",
+         type = "upper",
+         tl.cex = .7,
+         tl.pos = "n",
+         add = TRUE,
+         #tl.pos = "n", 
+         order = "AOE"
+         )
+
+# timelen 相关性
+cor_1 = cor(detall[,1:9])
+corrplot(cor_1,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_1,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+
+# start_stop_hour 相关性
+cor_2 = cor(detall[,10:15])
+corrplot(cor_2,
+         method = "number",
+         type = "lower",
+         tl.cex = 1.5,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_2,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1.5,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+# outoctets 相关性
+cor_3 = cor(detall[,c(16:24,61)])
+corrplot(cor_3,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_3,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+# inoctets 相关性
+cor_4 = cor(detall[,c(25:33,62)])
+corrplot(cor_4,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_4,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+# out_inoctets 相关性
+cor_5 = cor(detall[,34:42])
+corrplot(cor_5,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_5,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+# outpackets 相关性
+cor_6 = cor(detall[,43:51])
+corrplot(cor_6,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_6,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+# inpackets 相关性
+cor_7 = cor(detall[,52:60])
+corrplot(cor_7,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_7,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+
+# login 相关性
+cor_8 = cor(detall[,63:68])
+corrplot(cor_8,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_8,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+# outoctets_packets 相关性
+cor_9 = cor(detall[,69:77])
+corrplot(cor_9,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_9,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+# inoctets_packets 相关性
+cor_10 = cor(detall[,78:86])
+corrplot(cor_10,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_10,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+
+#  shuaixuanhou 相关性
+cor_11 = cor(detall[,c(1,5,9,11,12,20,25,29,34,
+                       37,38,43,47,52,56,63,64,
+                       71,72,73,75,77,78,82,84)])
+corrplot(cor_11,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_11,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+#  shuaixuanhou 2 相关性
+cor_12 = cor(detall[,c(1,5,9,11,12,20,25,34,63,64,
+                       71,72,73,75,77,78,82,84)])
+corrplot(cor_12,
+         method = "number",
+         type = "lower",
+         tl.cex = 1,
+         tl.pos = "t",
+         cl.pos = "n"
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+corrplot(cor_12,
+         method = "circle",
+         type = "upper",
+         tl.cex = 1,
+         tl.pos = "n",
+         add = TRUE
+         #tl.pos = "n", 
+         #order = "AOE"
+         )
+
+names_cor =colnames(detall[,c(1,5,9,11,12,20,25,34,63,64,71,72,73,75,77,78,82,84)])
+
+#hist(detall[,7])
+#hist(user_day[,2])
+#plot(density(detall[,9]))
+#pairs(detall[,1:5])
+```
+
+
+# 4.2 利用随机森林对变量进行规约
+```{r}
+library(randomForest)
+
+# 建立模型
+rf = randomForest(STATUS~., data=detall, ntree=100, proximity=TRUE)
+
+# 查看变量重要性
+#importance(rf)
+varImpPlot(rf)
+
+# 提取重要性在30以上的变量
+v = importance(rf)
+v = as.data.frame(v)
+v$name = row.names(v)
+
+names_rf = v[v$MeanDecreaseGini >= 30,]$name
+
+```
+
+
+# 5.对数据进行非平衡分布处理
+```{r}
+library(C50)
+
+#  
+ind = sample(2, nrow(detall), replace = TRUE, prob = c(.5,.5))
+trainData = detall[ind == 1,]
+testData = detall[ind == 2,]
+
+# 利用C50建立决策树
+Evaluation_c50_t = list(
+    zhunque = rep(0,10),
+    mingzhong = rep(0,10),
+    fugai = rep(0,10),
+    liushi = nrow(detall[detall$STATUS == 1,])/nrow(detall),
+    tisheng = rep(0,10)
+)
+
+for(i in 1:10){
+    detall_c50 = C5.0(STATUS~., data = trainData)
+    predict_c50 = predict(detall_c50, newdata = testData)
+    c50_table = table(predict_c50,testData$STATUS)
+    Evaluation_c50_t$zhunque[i] = (c50_table[1,1]+c50_table[2,2])/sum(c50_table)
+    Evaluation_c50_t$mingzhong[i] = c50_table[2,2]/(c50_table[2,1]+c50_table[2,2])
+    Evaluation_c50_t$fugai[i] = c50_table[2,2]/(c50_table[1,2]+c50_table[2,2])
+    Evaluation_c50_t$tisheng[i] = Evaluation_c50_t$mingzhong[i]/Evaluation_c50_t$liushi
+    
+    error_data = testData[predict_c50 != testData$STATUS &
+                 testData$STATUS == "1",]
+    ind = sample(2, nrow(error_data), replace = TRUE, prob = c(.5,.5))
+    error_data = error_data[ind == 1,]
+    trainData = rbind(trainData,error_data)
+}
+
+# 交叉验证
+Evaluation_c50_tz = list(
+    zhunque = rep(0,10),
+    mingzhong = rep(0,10),
+    fugai = rep(0,10),
+    liushi = nrow(detall[detall$STATUS == 1,])/nrow(detall),
+    tisheng = rep(0,10)
+)
+
+
+for(i in 1:10){
+    m = mm[[i]]
+    a = C5.0(STATUS~., data = trainData)
+    a_predict = predict(a, newdata = detall[m,])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_c50_tz$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_c50_tz$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_c50_tz$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_c50_tz$tisheng[i] = Evaluation_c50_tz$mingzhong[i]/liushi
+}
+
+Evaluation_c50_tz$zhunque[11] = mean(Evaluation_c50_tz$zhunque[1:10])
+Evaluation_c50_tz$mingzhong[11] = mean(Evaluation_c50_tz$mingzhong[1:10])
+Evaluation_c50_tz$fugai[11] = mean(Evaluation_c50_tz$fugai[1:10])
+Evaluation_c50_tz$tisheng[11] = mean(Evaluation_c50_tz$tisheng[1:10])
+
+print(Evaluation_c50_tz)
+
+
+```
+
+
+
+
+
+
+# 将数据分为训练集和测试集
+```{r}
+ind = sample(2, nrow(detall), replace = TRUE, prob = c(.7,.3))
+trainData = detall[ind == 1,]
+testData = detall[ind == 2,]
+```
+
+
+
+# 将数据分位10份
+```{r}
+Fold = function(Z=10, w, D, seed=7777){
+    n = nrow(w)
+    d=1:n
+    dd=list()
+    e=levels(w[,D])
+    T=length(e)
+    set.seed(seed)
+    for(i in 1:T){
+        d0=d[w[,D]==e[i]]
+        j=length(d0)
+        ZT=rep(1:Z, ceiling(j/Z))[1:j]
+        id=cbind(sample(ZT, length(ZT)), d0)
+        dd[[i]]=id
+    }
+    mm=list()
+    for(i in 1:Z){
+        u=NULL
+        for(j in 1:T)u=c(u,dd[[j]][dd[[j]][,1]==i,2])
+        mm[[i]]=u
+    }
+    return(mm)
+}
+
+D = 87
+Z = 10
+mm = Fold(Z, w = detall, D, 8888)
+```
+
+
+
+
+
+# 用随机森林建立预测模型
+```{r}
+library(randomForest)
+
+# 建立模型
+rf = randomForest(STATUS~., data=detall, ntree=100, proximity=TRUE)
+
+# 查看训练集预测准确性
+table(predict(rf), detall$STATUS)
+
+# 输出模型
+print(rf)
+
+# 查看模型基本特征
+attributes(rf)
+
+# 根据生成的随机森林中不同的树来绘制误差率
+plot(rf)
+
+# 查看变量重要性
+importance(rf)
+varImpPlot(rf)
+
+# 提取重要性在20以上的变量
+v = importance(rf)
+v = as.data.frame(v)
+v$name = row.names(v)
+names = v[v$MeanDecreaseGini >= 20,]$name
+v[order(v$MeanDecreaseGini),]
+
+
+# 用重要性20以上的变量重新建立模型
+rf2 = randomForest(STATUS~., data=trainData[,c(names_rf,"STATUS")],
+                   ntree=100, proximity=TRUE)
+varImpPlot(rf2)
+table(predict(rf2), trainData$STATUS)
+print(rf2)
+
+# 利用测试集对已构建的模型进行测试
+
+detall_predict = predict(rf2, newdata = testData[,c(names_rf,"STATUS")])
+
+detall_table = table(detall_predict, testData$STATUS)
+
+# 对模型进行评估
+# 整体准确率
+zhunque = (detall_table[1,1]+detall_table[2,2])/sum(detall_table)
+print(zhunque)
+
+# 命中率
+mingzhong = detall_table[2,2]/(detall_table[2,1]+detall_table[2,2])
+print(mingzhong)
+
+# 覆盖率
+fugai = detall_table[2,2]/(detall_table[1,2]+detall_table[2,2])
+print(fugai)
+
+# 总体流失率
+liushi = (detall_table[1,2]+detall_table[2,2])/sum(detall_table)
+print(liushi)
+
+# 提升率
+tisheng = mingzhong/liushi
+print(tisheng)
+
+
+
+
+# 利用全部变量建立随机森林模型
+# ----------------------------
+Evaluation_rf_all = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(randomForest)
+for(i in 1:Z){
+    m = mm[[i]]
+    n1 = length(m)
+    a = randomForest(STATUS~., data=detall[-m,], ntree=100, proximity=TRUE)
+    a_predict = predict(a, newdata = detall[m,])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_rf_all$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_rf_all$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_rf_all$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_rf_all$tisheng[i] = Evaluation_rf_all$mingzhong[i]/liushi
+}
+
+Evaluation_rf_all$zhunque[11] = mean(Evaluation_rf_all$zhunque[1:10])
+Evaluation_rf_all$mingzhong[11] = mean(Evaluation_rf_all$mingzhong[1:10])
+Evaluation_rf_all$fugai[11] = mean(Evaluation_rf_all$fugai[1:10])
+Evaluation_rf_all$tisheng[11] = mean(Evaluation_rf_all$tisheng[1:10])
+
+print(Evaluation_rf_all)
+
+
+
+# 利用随机森林对变量进行规约
+# -----------------------------------------------
+library(randomForest)
+rf = randomForest(STATUS~., data=detall, ntree=100, proximity=TRUE)
+
+# 查看变量重要性
+importance(rf)
+varImpPlot(rf)
+
+# 提取重要性在20以上的变量
+v = importance(rf)
+v = as.data.frame(v)
+v$name = row.names(v)
+v[order(v$MeanDecreaseGini),]
+names_rf = v[v$MeanDecreaseGini >= 30,]$name
+
+
+
+# 利用随机森林规约后变量建立随机森林模型
+# ------------------------------------------------
+Evaluation_rf_guiyue = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(randomForest)
+for(i in 1:Z){
+    m = mm[[i]]
+    n1 = length(m)
+    a = randomForest(STATUS~., data=detall[-m,c(names_rf,"STATUS")], ntree=100, proximity=TRUE)
+    a_predict = predict(a, newdata = detall[m,c(names_rf,"STATUS")])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_rf_guiyue$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_rf_guiyue$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_rf_guiyue$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_rf_guiyue$tisheng[i] = Evaluation_rf_guiyue$mingzhong[i]/liushi
+}
+
+Evaluation_rf_guiyue$zhunque[11] = mean(Evaluation_rf_guiyue$zhunque[1:10])
+Evaluation_rf_guiyue$mingzhong[11] = mean(Evaluation_rf_guiyue$mingzhong[1:10])
+Evaluation_rf_guiyue$fugai[11] = mean(Evaluation_rf_guiyue$fugai[1:10])
+Evaluation_rf_guiyue$tisheng[11] = mean(Evaluation_rf_guiyue$tisheng[1:10])
+
+print(Evaluation_rf_guiyue)
+
+
+
+# 利用随机森林对数据进行非平衡处理
+# -------------------------------------------------
+library(randomForest)
+#  创建初始窗口样本区
+ind = sample(2, nrow(detall), replace = TRUE, prob = c(.5,.5))
+detall_rf_train = detall[ind == 1,]
+detall_rf_test = detall[ind == 2,]
+
+# 评估提升过程
+Evaluation_rf_ph = list(
+    zhunque = rep(0,10),
+    mingzhong = rep(0,10),
+    fugai = rep(0,10),
+    liushi = nrow(detall[detall$STATUS == 1,])/nrow(detall),
+    tisheng = rep(0,10)
+)
+
+for(i in 1:7){
+    a = randomForest(STATUS~., data=detall_rf_train[,c(names_rf,"STATUS")], ntree=100, proximity=TRUE)
+    predict = predict(a, newdata = detall_rf_test[,c(names_rf,"STATUS")])
+    rf_table = table(predict,detall_rf_test$STATUS)
+    Evaluation_rf_ph$zhunque[i] = (rf_table[1,1]+rf_table[2,2])/sum(rf_table)
+    Evaluation_rf_ph$mingzhong[i] = rf_table[2,2]/(rf_table[2,1]+rf_table[2,2])
+    Evaluation_rf_ph$fugai[i] = rf_table[2,2]/(rf_table[1,2]+rf_table[2,2])
+    Evaluation_rf_ph$tisheng[i] = Evaluation_rf_ph$mingzhong[i]/Evaluation_rf_ph$liushi
+    
+    error_data = detall_rf_test[predict != detall_rf_test$STATUS &
+                 detall_rf_test$STATUS == "1",]
+    ind = sample(2, nrow(error_data), replace = TRUE, prob = c(.5,.5))
+    error_data = error_data[ind == 1,]
+    detall_rf_train = rbind(detall_rf_train,error_data)
+}
+
+print(Evaluation_rf_ph)
+
+
+# 用平衡后的数据建立模型，并对其进行交叉验证
+# ----------------------------------------------
+
+rf = randomForest(STATUS~., data=detall_rf_train[,c(names_rf,"STATUS")], ntree=100, proximity=TRUE)
+
+Evaluation_rf_ph_after = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(randomForest)
+for(i in 1:Z){
+    m = mm[[i]]
+    a_predict = predict(rf, newdata = detall[m,])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_rf_ph_after$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_rf_ph_after$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_rf_ph_after$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_rf_ph_after$tisheng[i] = Evaluation_rf_ph_after$mingzhong[i]/liushi
+}
+
+Evaluation_rf_ph_after$zhunque[11] = mean(Evaluation_rf_ph_after$zhunque[1:10])
+Evaluation_rf_ph_after$mingzhong[11] = mean(Evaluation_rf_ph_after$mingzhong[1:10])
+Evaluation_rf_ph_after$fugai[11] = mean(Evaluation_rf_ph_after$fugai[1:10])
+Evaluation_rf_ph_after$tisheng[11] = mean(Evaluation_rf_ph_after$tisheng[1:10])
+
+print(Evaluation_rf_ph_after)
+
+```
+
+
+
+
+# 利用rpart建立决策是模型
+```{r}
+library(rpart.plot)
+library(rpart)
+# 建立决策树模型
+detall_rpart = rpart(STATUS~.,data = trainData[,c(names,"STATUS")], 
+                     control = rpart.control(minsplit = 10))
+
+# 查看决策树特征
+attributes(detall_rpart)
+
+# 输出决策树模型
+print(detall_rpart)
+print(detall_rpart$cptable)
+
+# 绘制决策树
+rpart.plot(detall_rpart, type = 2, extra = 1, faclen = 0)
+
+# 对决策树进行剪枝
+opt = which.min(detall_rpart$cptable[,"xerror"])
+cp = detall_rpart$cptable[opt, "CP"]
+detall_prune = prune(detall_rpart, cp=cp)
+print(detall_prune)
+rpart.plot(detall_prune, type = 2, extra = 1, faclen = 0)
+
+# 对模型进行评估
+predict_rpart = predict(detall_prune, newdata = testData[,c(names,"STATUS")], type="class")
+
+rpart_table = table(predict_rpart,testData$STATUS)
+
+# 整体准确率
+zhunque = (rpart_table[1,1]+rpart_table[2,2])/sum(rpart_table)
+print(zhunque)
+
+# 命中率
+mingzhong = rpart_table[2,2]/(rpart_table[2,1]+rpart_table[2,2])
+print(mingzhong)
+
+# 覆盖率
+fugai = rpart_table[2,2]/(rpart_table[1,2]+rpart_table[2,2])
+print(fugai)
+
+# 总体流失率
+liushi = (rpart_table[1,2]+rpart_table[2,2])/sum(rpart_table)
+print(liushi)
+
+# 提升率
+tisheng = mingzhong/liushi
+print(tisheng)
+
+```
+
+
+# 利用C50建立决策树
+
+```{r}
+library(C50)
+
+# 利用C50建立决策树
+detall_c50 = C5.0(STATUS~., data = trainData[,c(names_c50,"STATUS")])
+
+# 绘制决策树
+plot(detall_c50)
+
+# 评估决策树
+predict_c50 = predict(detall_c50, newdata = testData[,c(names_c50,"STATUS")])
+
+c50_table = table(predict_c50,testData$STATUS)
+
+# 整体准确率
+zhunque = (c50_table[1,1]+c50_table[2,2])/sum(c50_table)
+print(zhunque)
+
+# 命中率
+mingzhong = c50_table[2,2]/(c50_table[2,1]+c50_table[2,2])
+print(mingzhong)
+
+# 覆盖率
+fugai = c50_table[2,2]/(c50_table[1,2]+c50_table[2,2])
+print(fugai)
+
+# 总体流失率
+liushi = (c50_table[1,2]+c50_table[2,2])/sum(c50_table)
+print(liushi)
+
+# 提升率
+tisheng = mingzhong/liushi
+print(tisheng)
+
+
+
+# 查看变量重要性
+names_c50 = C5imp(detall_c50)
+
+names_c50 = row.names(names_c50)[names_c50$Overall >= 10]
+
+
+#----------------------------------------------
+# 利用重要变量建立决策树
+detall_c50_2 = C5.0(STATUS~., data = trainData[,c(names_c50,"STATUS")])
+
+# 绘制决策树
+plot(detall_c50_2, subtree = 3)
+
+# 评估决策树
+detall_c50_2 = predict(detall_c50_2, newdata = testData[,c(names_c50,"STATUS")])
+
+c50_table_2 = table(detall_c50_2,testData$STATUS)
+
+# 整体准确率
+zhunque = (c50_table_2[1,1]+c50_table_2[2,2])/sum(c50_table_2)
+print(zhunque)
+
+# 命中率
+mingzhong = c50_table_2[2,2]/(c50_table_2[2,1]+c50_table_2[2,2])
+print(mingzhong)
+
+# 覆盖率
+fugai = c50_table_2[2,2]/(c50_table_2[1,2]+c50_table_2[2,2])
+print(fugai)
+
+# 总体流失率
+liushi = (c50_table_2[1,2]+c50_table_2[2,2])/sum(c50_table_2)
+print(liushi)
+
+# 提升率
+tisheng = mingzhong/liushi
+print(tisheng)
+
+
+
+# 全部变量-利用C50建立模型
+#------------------------------------------
+Evaluation_c50_all = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(C50)
+for(i in 1:Z){
+    m = mm[[i]]
+    n1 = length(m)
+    a =  C5.0(STATUS~., data=detall[-m,])
+    a_predict = predict(a, newdata = detall[m,])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_c50_all$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_c50_all$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_c50_all$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_c50_all$tisheng[i] = Evaluation_c50_all$mingzhong[i]/liushi
+}
+
+Evaluation_c50_all$zhunque[11] = mean(Evaluation_c50_all$zhunque[1:10])
+Evaluation_c50_all$mingzhong[11] = mean(Evaluation_c50_all$mingzhong[1:10])
+Evaluation_c50_all$fugai[11] = mean(Evaluation_c50_all$fugai[1:10])
+Evaluation_c50_all$tisheng[11] = mean(Evaluation_c50_all$tisheng[1:10])
+
+print(Evaluation_c50_all)
+
+
+# 利用C50进行变量规约
+# ---------------------------------------
+library(C50)
+detall_c50 = C5.0(STATUS~., data = detall)
+
+# 查看变量重要性
+names_c50 = C5imp(detall_c50)
+names_c50 = row.names(names_c50)[names_c50$Overall >= 10]
+
+
+# 规约后变量-利用C50建立模型
+#------------------------------------------
+Evaluation_c50_guiyue = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(C50)
+for(i in 1:Z){
+    m = mm[[i]]
+    a =  C5.0(STATUS~., data=detall[-m,c(names_c50,"STATUS")])
+    a_predict = predict(a, newdata = detall[m,c(names_c50,"STATUS")])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_c50_guiyue$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_c50_guiyue$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_c50_guiyue$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_c50_guiyue$tisheng[i] = Evaluation_c50_guiyue$mingzhong[i]/liushi
+}
+
+Evaluation_c50_guiyue$zhunque[11] = mean(Evaluation_c50_guiyue$zhunque[1:10])
+Evaluation_c50_guiyue$mingzhong[11] = mean(Evaluation_c50_guiyue$mingzhong[1:10])
+Evaluation_c50_guiyue$fugai[11] = mean(Evaluation_c50_guiyue$fugai[1:10])
+Evaluation_c50_guiyue$tisheng[11] = mean(Evaluation_c50_guiyue$tisheng[1:10])
+
+print(Evaluation_c50_guiyue)
+
+
+# 利用C50对数据进行非平衡处理
+# ----------------------------------------------------
+
+library(C50)
+
+# 
+ind = sample(2, nrow(detall), replace = TRUE, prob = c(.5,.5))
+detall_c50_train = detall[ind == 1,]
+detall_c50_test = detall[ind == 2,]
+
+# 利用C50建立决策树
+Evaluation_c50_ph = list(
+    zhunque = rep(0,10),
+    mingzhong = rep(0,10),
+    fugai = rep(0,10),
+    liushi = nrow(detall[detall$STATUS == 1,])/nrow(detall),
+    tisheng = rep(0,10)
+)
+
+for(i in 1:10){
+    detall_c50 = C5.0(STATUS~., data = detall_c50_train[,c(names_c50,"STATUS")])
+    predict_c50 = predict(detall_c50, newdata = detall_c50_test[,c(names_c50,"STATUS")])
+    c50_table = table(predict_c50,detall_c50_test$STATUS)
+    Evaluation_c50_ph$zhunque[i] = (c50_table[1,1]+c50_table[2,2])/sum(c50_table)
+    Evaluation_c50_ph$mingzhong[i] = c50_table[2,2]/(c50_table[2,1]+c50_table[2,2])
+    Evaluation_c50_ph$fugai[i] = c50_table[2,2]/(c50_table[1,2]+c50_table[2,2])
+    Evaluation_c50_ph$tisheng[i] = Evaluation_c50_ph$mingzhong[i]/Evaluation_c50_ph$liushi
+    
+    error_data = detall_c50_test[predict_c50 != detall_c50_test$STATUS &
+                 detall_c50_test$STATUS == "1",]
+    ind = sample(2, nrow(error_data), replace = TRUE, prob = c(.5,.5))
+    error_data = error_data[ind == 1,]
+    detall_c50_train = rbind(detall_c50_train,error_data)
+}
+
+print(Evaluation_c50_ph)
+
+
+# 平衡后数据进行交叉验证
+# ------------------------------------------------------
+
+a =  C5.0(STATUS~., data=detall_c50_train)
+
+Evaluation_c50_ph_after = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(C50)
+for(i in 1:Z){
+    m = mm[[i]]
+    a_predict = predict(a, newdata = detall[m,])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_c50_ph_after$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_c50_ph_after$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_c50_ph_after$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_c50_ph_after$tisheng[i] = Evaluation_c50_ph_after$mingzhong[i]/liushi
+}
+
+Evaluation_c50_ph_after$zhunque[11] = mean(Evaluation_c50_ph_after$zhunque[1:10])
+Evaluation_c50_ph_after$mingzhong[11] = mean(Evaluation_c50_ph_after$mingzhong[1:10])
+Evaluation_c50_ph_after$fugai[11] = mean(Evaluation_c50_ph_after$fugai[1:10])
+Evaluation_c50_ph_after$tisheng[11] = mean(Evaluation_c50_ph_after$tisheng[1:10])
+
+print(Evaluation_c50_ph_after)
+
+```
+
+
+
+# 支持向量机建立模型
+```{r}
+library(e1071)
+# 建立支持向量机模型
+wts = 1000/table(trainData$STATUS)
+wts[1] = 0.37
+wts[2] = 0.63 
+
+detall_svm = svm(STATUS~., data = trainData,
+                 class.weight =wts,
+                 cost = 10)
+
+plot(detall_svm, trainData, timelen_sum~stop_hour_most)
+
+# 评估支持向量机模型
+predict_svm = predict(detall_svm, newdata = testData)
+
+svm_table = table(predict_svm,testData$STATUS)
+
+# 整体准确率
+zhunque = (svm_table[1,1]+svm_table[2,2])/sum(svm_table)
+print(zhunque)
+
+# 命中率
+mingzhong = svm_table[2,2]/(svm_table[2,1]+svm_table[2,2])
+print(mingzhong)
+
+# 覆盖率
+fugai = svm_table[2,2]/(svm_table[1,2]+svm_table[2,2])
+print(fugai)
+
+# 总体流失率
+liushi = (svm_table[1,2]+svm_table[2,2])/sum(svm_table)
+print(liushi)
+
+# 提升率
+tisheng = mingzhong/liushi
+print(tisheng)
+
+
+# 十折交叉验证
+Evaluation_svm = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(e1071)
+for(i in 1:Z){
+    m = mm[[i]]
+    n1 = length(m)
+    a =   svm(STATUS~., data = detall[-m,], class.weight=wts, cost=10)
+    a_predict = predict(a, newdata = detall[m,])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_svm$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_svm$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_svm$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_svm$tisheng[i] = Evaluation_svm$mingzhong[i]/liushi
+}
+
+Evaluation_svm$zhunque[11] = mean(Evaluation_svm$zhunque[1:10])
+Evaluation_svm$mingzhong[11] = mean(Evaluation_svm$mingzhong[1:10])
+Evaluation_svm$fugai[11] = mean(Evaluation_svm$fugai[1:10])
+Evaluation_svm$tisheng[11] = mean(Evaluation_svm$tisheng[1:10])
+
+print(Evaluation_svm)
+
+```
+
+
+# 利用SMOTE算法重构数据
+```{r}
+#install.packages("DMwR")
+
+
+
+```
+
+
+
+
+
+
