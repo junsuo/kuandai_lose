@@ -580,7 +580,7 @@ print(Evaluation_c50_guiyue)
 
 library(C50)
 
-# 
+# 生成原始窗口
 ind = sample(2, nrow(detall), replace = TRUE, prob = c(.5,.5))
 detall_c50_train = detall[ind == 1,]
 detall_c50_test = detall[ind == 2,]
@@ -611,37 +611,6 @@ for(i in 1:10){
 }
 
 print(Evaluation_c50_ph)
-
-
-# 平衡后数据进行交叉验证
-# ------------------------------------------------------
-
-a =  C5.0(STATUS~., data=detall_c50_train)
-
-Evaluation_c50_ph_after = list(zhunque=rep(0,Z),
-                  mingzhong=rep(0,Z),
-                  fugai=rep(0,Z),
-                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
-                  tisheng=rep(0,Z))
-
-library(C50)
-for(i in 1:Z){
-    m = mm[[i]]
-    a_predict = predict(a, newdata = detall[m,])
-    a_table = table(a_predict, detall[m,]$STATUS)
-    Evaluation_c50_ph_after$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
-    Evaluation_c50_ph_after$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
-    Evaluation_c50_ph_after$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
-    Evaluation_c50_ph_after$tisheng[i] = Evaluation_c50_ph_after$mingzhong[i]/liushi
-}
-
-Evaluation_c50_ph_after$zhunque[11] = mean(Evaluation_c50_ph_after$zhunque[1:10])
-Evaluation_c50_ph_after$mingzhong[11] = mean(Evaluation_c50_ph_after$mingzhong[1:10])
-Evaluation_c50_ph_after$fugai[11] = mean(Evaluation_c50_ph_after$fugai[1:10])
-Evaluation_c50_ph_after$tisheng[11] = mean(Evaluation_c50_ph_after$tisheng[1:10])
-
-print(Evaluation_c50_ph_after)
-
 ```
 
 
@@ -651,7 +620,6 @@ print(Evaluation_c50_ph_after)
 
 # 用随机森林建立预测模型
 ```{r}
-
 # 全部变量——随机森林
 # ----------------------------
 Evaluation_rf_all = list(zhunque=rep(0,Z),
@@ -681,7 +649,6 @@ Evaluation_rf_all$tisheng[11] = mean(Evaluation_rf_all$tisheng[1:10])
 print(Evaluation_rf_all)
 
 
-
 # 变量规约
 # -----------------------------------------------
 library(randomForest)
@@ -697,7 +664,6 @@ v = as.data.frame(v)
 v$name = row.names(v)
 v[order(v$MeanDecreaseGini),]
 names_rf = v[v$MeanDecreaseGini >= 30,]$name
-
 
 
 # 归约变量——随机森林
@@ -727,7 +693,6 @@ Evaluation_rf_guiyue$fugai[11] = mean(Evaluation_rf_guiyue$fugai[1:10])
 Evaluation_rf_guiyue$tisheng[11] = mean(Evaluation_rf_guiyue$tisheng[1:10])
 
 print(Evaluation_rf_guiyue)
-
 
 
 # 平衡处理
@@ -764,9 +729,6 @@ for(i in 1:7){
 }
 
 print(Evaluation_rf_ph)
-
-
-
 ```
 
 
@@ -814,7 +776,39 @@ tisheng = mingzhong/liushi
 print(tisheng)
 
 
-# 十折交叉验证
+# 全部变量——支持向量机
+# ----------------------------------------------------
+liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall)
+
+Evaluation_svm_all = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(e1071)
+for(i in 1:Z){
+    m = mm[[i]]
+    a =   svm(STATUS~., data = detall[-m,], class.weight=wts, cost=10)
+    a_predict = predict(a, newdata = detall[m,])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_svm_all$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_svm_all$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_svm_all$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_svm_all$tisheng[i] = Evaluation_svm_all$mingzhong[i]/liushi
+}
+
+Evaluation_svm_all$zhunque[11] = mean(Evaluation_svm_all$zhunque[1:10])
+Evaluation_svm_all$mingzhong[11] = mean(Evaluation_svm_all$mingzhong[1:10])
+Evaluation_svm_all$fugai[11] = mean(Evaluation_svm_all$fugai[1:10])
+Evaluation_svm_all$tisheng[11] = mean(Evaluation_svm_all$tisheng[1:10])
+
+print(Evaluation_svm_all)
+
+
+
+# 规约变量——支持向量机
+# ----------------------------------------------------
 Evaluation_svm = list(zhunque=rep(0,Z),
                   mingzhong=rep(0,Z),
                   fugai=rep(0,Z),
@@ -824,9 +818,8 @@ Evaluation_svm = list(zhunque=rep(0,Z),
 library(e1071)
 for(i in 1:Z){
     m = mm[[i]]
-    n1 = length(m)
-    a =   svm(STATUS~., data = detall[-m,], class.weight=wts, cost=10)
-    a_predict = predict(a, newdata = detall[m,])
+    a =   svm(STATUS~., data = detall[-m,c(names_cor,"STATUS")], class.weight=wts, cost=10)
+    a_predict = predict(a, newdata = detall[m,c(names_cor,"STATUS")])
     a_table = table(a_predict, detall[m,]$STATUS)
     Evaluation_svm$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
     Evaluation_svm$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
@@ -840,6 +833,40 @@ Evaluation_svm$fugai[11] = mean(Evaluation_svm$fugai[1:10])
 Evaluation_svm$tisheng[11] = mean(Evaluation_svm$tisheng[1:10])
 
 print(Evaluation_svm)
+
+
+
+# 变量惩罚——支持向量机
+# ----------------------------------------------------
+
+wts = 1000/table(trainData$STATUS)
+wts[1] = 0.37
+wts[2] = 0.63 
+
+Evaluation_svm_cost = list(zhunque=rep(0,Z),
+                  mingzhong=rep(0,Z),
+                  fugai=rep(0,Z),
+                  liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
+                  tisheng=rep(0,Z))
+
+library(e1071)
+for(i in 1:Z){
+    m = mm[[i]]
+    a =   svm(STATUS~., data = detall[-m,], class.weight=wts, cost=10)
+    a_predict = predict(a, newdata = detall[m,])
+    a_table = table(a_predict, detall[m,]$STATUS)
+    Evaluation_svm_cost$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_svm_cost$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_svm_cost$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_svm_cost$tisheng[i] = Evaluation_svm_cost$mingzhong[i]/liushi
+}
+
+Evaluation_svm_cost$zhunque[11] = mean(Evaluation_svm_cost$zhunque[1:10])
+Evaluation_svm_cost$mingzhong[11] = mean(Evaluation_svm_cost$mingzhong[1:10])
+Evaluation_svm_cost$fugai[11] = mean(Evaluation_svm_cost$fugai[1:10])
+Evaluation_svm_cost$tisheng[11] = mean(Evaluation_svm_cost$tisheng[1:10])
+
+print(Evaluation_svm_cost)
 
 ```
 
