@@ -7,7 +7,6 @@ output: html_document
 
 
 # 1.获取数据
-
 ```{r}
 library(RODBC)
 con = odbcConnect("sql", uid="sa", pwd="wjstyut")
@@ -20,23 +19,18 @@ detall$STATUS = as.factor(detall$STATUS)
 detall$timelen_sum = detall$timelen_sum/60
 # 去掉用户电话号码主键
 detall = detall[,-1]
-
 ```
 
 
-
-# 2.初步查看数据
+# 2.数据探索
 ```{r}
+# 数据基本特征
 dim(detall)
 str(detall)
 #attributes(detall)
 head(detall)
 summary(detall)
-```
 
-
-# 3.人工对变量进行探索
-```{r}
 # 不同用户的各变量分布情况
 setwd("D:/2016/A-策划项目/03-宽带用户行为分析系统/03-建模过程")
 for(i in 1:9){
@@ -72,8 +66,9 @@ dev.off()
 ```
 
 
-#  4.对变量进行规约
-## 4.1 利用相关性算法对变量进行规约
+# 3.变量规约
+
+利用相关性算法对变量进行规约
 ```{r}
 #相关性分析
 library(corrplot)
@@ -366,113 +361,16 @@ names_cor =colnames(detall[,c(1,5,9,11,12,20,25,34,63,64,71,72,73,75,77,78,82,84
 ```
 
 
+# 4.拆分数据
 
-
-
-# 4.2 利用随机森林对变量进行规约
-```{r}
-library(randomForest)
-
-# 建立模型
-rf = randomForest(STATUS~., data=detall, ntree=100, proximity=TRUE)
-
-# 查看变量重要性
-#importance(rf)
-varImpPlot(rf)
-
-# 提取重要性在30以上的变量
-v = importance(rf)
-v = as.data.frame(v)
-v$name = row.names(v)
-
-names_rf = v[v$MeanDecreaseGini >= 30,]$name
-
-```
-
-
-
-
-
-# 5.对数据进行非平衡分布处理
-```{r}
-library(C50)
-
-#  
-ind = sample(2, nrow(detall), replace = TRUE, prob = c(.5,.5))
-trainData = detall[ind == 1,]
-testData = detall[ind == 2,]
-
-# 利用C50建立决策树
-Evaluation_c50_t = list(
-    zhunque = rep(0,10),
-    mingzhong = rep(0,10),
-    fugai = rep(0,10),
-    liushi = nrow(detall[detall$STATUS == 1,])/nrow(detall),
-    tisheng = rep(0,10)
-)
-
-for(i in 1:10){
-    detall_c50 = C5.0(STATUS~., data = trainData)
-    predict_c50 = predict(detall_c50, newdata = testData)
-    c50_table = table(predict_c50,testData$STATUS)
-    Evaluation_c50_t$zhunque[i] = (c50_table[1,1]+c50_table[2,2])/sum(c50_table)
-    Evaluation_c50_t$mingzhong[i] = c50_table[2,2]/(c50_table[2,1]+c50_table[2,2])
-    Evaluation_c50_t$fugai[i] = c50_table[2,2]/(c50_table[1,2]+c50_table[2,2])
-    Evaluation_c50_t$tisheng[i] = Evaluation_c50_t$mingzhong[i]/Evaluation_c50_t$liushi
-    
-    error_data = testData[predict_c50 != testData$STATUS &
-                 testData$STATUS == "1",]
-    ind = sample(2, nrow(error_data), replace = TRUE, prob = c(.5,.5))
-    error_data = error_data[ind == 1,]
-    trainData = rbind(trainData,error_data)
-}
-
-# 交叉验证
-Evaluation_c50_tz = list(
-    zhunque = rep(0,10),
-    mingzhong = rep(0,10),
-    fugai = rep(0,10),
-    liushi = nrow(detall[detall$STATUS == 1,])/nrow(detall),
-    tisheng = rep(0,10)
-)
-
-
-for(i in 1:10){
-    m = mm[[i]]
-    a = C5.0(STATUS~., data = trainData)
-    a_predict = predict(a, newdata = detall[m,])
-    a_table = table(a_predict, detall[m,]$STATUS)
-    Evaluation_c50_tz$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
-    Evaluation_c50_tz$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
-    Evaluation_c50_tz$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
-    Evaluation_c50_tz$tisheng[i] = Evaluation_c50_tz$mingzhong[i]/liushi
-}
-
-Evaluation_c50_tz$zhunque[11] = mean(Evaluation_c50_tz$zhunque[1:10])
-Evaluation_c50_tz$mingzhong[11] = mean(Evaluation_c50_tz$mingzhong[1:10])
-Evaluation_c50_tz$fugai[11] = mean(Evaluation_c50_tz$fugai[1:10])
-Evaluation_c50_tz$tisheng[11] = mean(Evaluation_c50_tz$tisheng[1:10])
-
-print(Evaluation_c50_tz)
-
-
-```
-
-
-
-
-
-
-# 将数据分为训练集和测试集
+## 4.1数据拆分为训练集和测试集
 ```{r}
 ind = sample(2, nrow(detall), replace = TRUE, prob = c(.7,.3))
 trainData = detall[ind == 1,]
 testData = detall[ind == 2,]
 ```
 
-
-
-# 将数据分位10份
+## 4.2十折交叉验证数据集
 ```{r}
 Fold = function(Z=10, w, D, seed=7777){
     n = nrow(w)
@@ -503,9 +401,8 @@ mm = Fold(Z, w = detall, D, 8888)
 ```
 
 
-
-# 利用C50建立决策树
-
+# 5.建立模型
+# 5.1利用C50建立决策树模型
 ```{r}
 
 # 全部变量——C50
@@ -618,7 +515,7 @@ print(Evaluation_c50_ph)
 
 
 
-# 用随机森林建立预测模型
+# 5.2利用randomForest建立随机森林模型
 ```{r}
 # 全部变量——随机森林
 # ----------------------------
@@ -736,49 +633,11 @@ print(Evaluation_rf_ph)
 
 
 
-# 支持向量机建立模型
+# 5.3利用e1071建立支持向量机模型
 ```{r}
-library(e1071)
-# 建立支持向量机模型
-wts = 1000/table(trainData$STATUS)
-wts[1] = 0.37
-wts[2] = 0.63 
-
-detall_svm = svm(STATUS~., data = trainData,
-                 class.weight =wts,
-                 cost = 10)
-
-plot(detall_svm, trainData, timelen_sum~stop_hour_most)
-
-# 评估支持向量机模型
-predict_svm = predict(detall_svm, newdata = testData)
-
-svm_table = table(predict_svm,testData$STATUS)
-
-# 整体准确率
-zhunque = (svm_table[1,1]+svm_table[2,2])/sum(svm_table)
-print(zhunque)
-
-# 命中率
-mingzhong = svm_table[2,2]/(svm_table[2,1]+svm_table[2,2])
-print(mingzhong)
-
-# 覆盖率
-fugai = svm_table[2,2]/(svm_table[1,2]+svm_table[2,2])
-print(fugai)
-
-# 总体流失率
-liushi = (svm_table[1,2]+svm_table[2,2])/sum(svm_table)
-print(liushi)
-
-# 提升率
-tisheng = mingzhong/liushi
-print(tisheng)
-
-
 # 全部变量——支持向量机
 # ----------------------------------------------------
-liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall)
+library(e1071)
 
 Evaluation_svm_all = list(zhunque=rep(0,Z),
                   mingzhong=rep(0,Z),
@@ -789,7 +648,7 @@ Evaluation_svm_all = list(zhunque=rep(0,Z),
 library(e1071)
 for(i in 1:Z){
     m = mm[[i]]
-    a =   svm(STATUS~., data = detall[-m,], class.weight=wts, cost=10)
+    a =   svm(STATUS~., data = detall[-m,])
     a_predict = predict(a, newdata = detall[m,])
     a_table = table(a_predict, detall[m,]$STATUS)
     Evaluation_svm_all$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
@@ -818,7 +677,7 @@ Evaluation_svm = list(zhunque=rep(0,Z),
 library(e1071)
 for(i in 1:Z){
     m = mm[[i]]
-    a =   svm(STATUS~., data = detall[-m,c(names_cor,"STATUS")], class.weight=wts, cost=10)
+    a =   svm(STATUS~., data = detall[-m,c(names_cor,"STATUS")])
     a_predict = predict(a, newdata = detall[m,c(names_cor,"STATUS")])
     a_table = table(a_predict, detall[m,]$STATUS)
     Evaluation_svm$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
@@ -870,14 +729,6 @@ print(Evaluation_svm_cost)
 
 ```
 
-
-# 利用SMOTE算法重构数据
-```{r}
-#install.packages("DMwR")
-
-
-
-```
 
 
 
