@@ -8,7 +8,7 @@ output: html_document
 
 # 1.获取数据
 ```{r}
-library(RODBC)
+require(RODBC)
 con = odbcConnect("sql", uid="sa", pwd="wjstyut")
 detall = sqlQuery(con,"select * from TMP_DETAIL_ALL_A where status is not null")
 close(con)
@@ -402,7 +402,7 @@ mm = Fold(Z, w = detall, D, 8888)
 
 
 # 5.建立模型
-# 5.1利用C50建立决策树模型
+## 5.1利用C50建立决策树模型
 ```{r}
 
 # 全部变量——C50
@@ -475,8 +475,6 @@ print(Evaluation_c50_guiyue)
 # 平衡处理——C50
 # ----------------------------------------------------
 
-library(C50)
-
 # 生成原始窗口
 ind = sample(2, nrow(detall), replace = TRUE, prob = c(.5,.5))
 detall_c50_train = detall[ind == 1,]
@@ -491,6 +489,7 @@ Evaluation_c50_ph = list(
     tisheng = rep(0,10)
 )
 
+require(C50)
 for(i in 1:10){
     detall_c50 = C5.0(STATUS~., data = detall_c50_train[,c(names_c50,"STATUS")])
     predict_c50 = predict(detall_c50, newdata = detall_c50_test[,c(names_c50,"STATUS")])
@@ -499,7 +498,6 @@ for(i in 1:10){
     Evaluation_c50_ph$mingzhong[i] = c50_table[2,2]/(c50_table[2,1]+c50_table[2,2])
     Evaluation_c50_ph$fugai[i] = c50_table[2,2]/(c50_table[1,2]+c50_table[2,2])
     Evaluation_c50_ph$tisheng[i] = Evaluation_c50_ph$mingzhong[i]/Evaluation_c50_ph$liushi
-    
     error_data = detall_c50_test[predict_c50 != detall_c50_test$STATUS &
                  detall_c50_test$STATUS == "1",]
     ind = sample(2, nrow(error_data), replace = TRUE, prob = c(.5,.5))
@@ -511,11 +509,7 @@ print(Evaluation_c50_ph)
 ```
 
 
-
-
-
-
-# 5.2利用randomForest建立随机森林模型
+## 5.2利用randomForest建立随机森林模型
 ```{r}
 # 全部变量——随机森林
 # ----------------------------
@@ -548,7 +542,7 @@ print(Evaluation_rf_all)
 
 # 变量规约
 # -----------------------------------------------
-library(randomForest)
+require(randomForest)
 rf = randomForest(STATUS~., data=detall, ntree=100, proximity=TRUE)
 
 # 查看变量重要性
@@ -594,7 +588,7 @@ print(Evaluation_rf_guiyue)
 
 # 平衡处理
 # -------------------------------------------------
-library(randomForest)
+
 #  创建初始窗口样本区
 ind = sample(2, nrow(detall), replace = TRUE, prob = c(.5,.5))
 detall_rf_train = detall[ind == 1,]
@@ -609,7 +603,8 @@ Evaluation_rf_ph = list(
     tisheng = rep(0,10)
 )
 
-for(i in 1:7){
+require(randomForest)
+for(i in 1:10){
     a = randomForest(STATUS~., data=detall_rf_train[,c(names_rf,"STATUS")], ntree=100, proximity=TRUE)
     predict = predict(a, newdata = detall_rf_test[,c(names_rf,"STATUS")])
     rf_table = table(predict,detall_rf_test$STATUS)
@@ -633,19 +628,17 @@ print(Evaluation_rf_ph)
 
 
 
-# 5.3利用e1071建立支持向量机模型
+## 5.3利用e1071建立支持向量机模型
 ```{r}
 # 全部变量——支持向量机
 # ----------------------------------------------------
-library(e1071)
-
 Evaluation_svm_all = list(zhunque=rep(0,Z),
                   mingzhong=rep(0,Z),
                   fugai=rep(0,Z),
                   liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
                   tisheng=rep(0,Z))
 
-library(e1071)
+require(e1071)
 for(i in 1:Z){
     m = mm[[i]]
     a =   svm(STATUS~., data = detall[-m,])
@@ -665,39 +658,39 @@ Evaluation_svm_all$tisheng[11] = mean(Evaluation_svm_all$tisheng[1:10])
 print(Evaluation_svm_all)
 
 
-
 # 规约变量——支持向量机
 # ----------------------------------------------------
-Evaluation_svm = list(zhunque=rep(0,Z),
+Evaluation_svm_guiyue = list(zhunque=rep(0,Z),
                   mingzhong=rep(0,Z),
                   fugai=rep(0,Z),
                   liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
                   tisheng=rep(0,Z))
 
-library(e1071)
+require(e1071)
 for(i in 1:Z){
     m = mm[[i]]
     a =   svm(STATUS~., data = detall[-m,c(names_cor,"STATUS")])
     a_predict = predict(a, newdata = detall[m,c(names_cor,"STATUS")])
     a_table = table(a_predict, detall[m,]$STATUS)
-    Evaluation_svm$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
-    Evaluation_svm$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
-    Evaluation_svm$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
-    Evaluation_svm$tisheng[i] = Evaluation_svm$mingzhong[i]/liushi
+    Evaluation_svm_guiyue$zhunque[i] = (a_table[1,1]+a_table[2,2])/sum(a_table)
+    Evaluation_svm_guiyue$mingzhong[i] = a_table[2,2]/(a_table[2,1]+a_table[2,2])
+    Evaluation_svm_guiyue$fugai[i] = a_table[2,2]/(a_table[1,2]+a_table[2,2])
+    Evaluation_svm_guiyue$tisheng[i] = Evaluation_svm_guiyue$mingzhong[i]/liushi
 }
 
-Evaluation_svm$zhunque[11] = mean(Evaluation_svm$zhunque[1:10])
-Evaluation_svm$mingzhong[11] = mean(Evaluation_svm$mingzhong[1:10])
-Evaluation_svm$fugai[11] = mean(Evaluation_svm$fugai[1:10])
-Evaluation_svm$tisheng[11] = mean(Evaluation_svm$tisheng[1:10])
+Evaluation_svm_guiyue$zhunque[11] = mean(Evaluation_svm_guiyue$zhunque[1:10])
+Evaluation_svm_guiyue$mingzhong[11] = mean(Evaluation_svm_guiyue$mingzhong[1:10])
+Evaluation_svm_guiyue$fugai[11] = mean(Evaluation_svm_guiyue$fugai[1:10])
+Evaluation_svm_guiyue$tisheng[11] = mean(Evaluation_svm_guiyue$tisheng[1:10])
 
-print(Evaluation_svm)
+print(Evaluation_svm_guiyue)
 
 
 
 # 变量惩罚——支持向量机
 # ----------------------------------------------------
 
+# 惩罚系数
 wts = 1000/table(trainData$STATUS)
 wts[1] = 0.37
 wts[2] = 0.63 
@@ -708,7 +701,7 @@ Evaluation_svm_cost = list(zhunque=rep(0,Z),
                   liushi=nrow(detall[detall$STATUS == 1,])/nrow(detall),
                   tisheng=rep(0,Z))
 
-library(e1071)
+require(e1071)
 for(i in 1:Z){
     m = mm[[i]]
     a =   svm(STATUS~., data = detall[-m,], class.weight=wts, cost=10)
